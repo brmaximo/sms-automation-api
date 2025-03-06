@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 require('dotenv').config();
 const authRoutes = require('./routes/auth');
+const verificationRoutes = require('./routes/verification');
 const db = require('./db');
 
 const app = express();
@@ -39,6 +40,9 @@ app.get('/', (req, res) => {
 
 // Mount authentication routes
 app.use('/api/auth', authRoutes);
+
+// Mount verification routes
+app.use('/api/verification', verificationRoutes);
 
 // Global error handler
 app.use((err, req, res, next) => {
