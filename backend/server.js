@@ -2,7 +2,6 @@ const express = require('express');
 const cors = require('cors');
 require('dotenv').config();
 const authRoutes = require('./routes/auth');
-const verificationRoutes = require('./routes/verification'); // Nueva línea para importar rutas de verificación
 const db = require('./db');
 
 const app = express();
@@ -58,9 +57,6 @@ app.get('/', (req, res) => {
 
 // Rutas de autenticación
 app.use('/api/auth', authRoutes);
-
-// Rutas de verificación de email (nueva línea)
-app.use('/api/verification', verificationRoutes);
 
 // Manejo de errores
 app.use((err, req, res, next) => {
