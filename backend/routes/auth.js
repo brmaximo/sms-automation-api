@@ -3,6 +3,18 @@ const router = express.Router();
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcrypt');
 const db = require('../db');
+const nodemailer = require('nodemailer');
+
+// Configure email transporter
+const transporter = nodemailer.createTransport({
+  host: process.env.EMAIL_HOST,
+  port: process.env.EMAIL_PORT,
+  secure: process.env.EMAIL_SECURE === 'true',
+  auth: {
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASSWORD
+  }
+});
 
 // Middleware de autenticación - será aplicado solo a rutas protegidas
 const authMiddleware = async (req, res, next) => {
@@ -55,7 +67,7 @@ router.post('/register', async (req, res) => {
     
     // Insertar nuevo usuario
     const newUser = await db.query(
-      'INSERT INTO users (name, email, password) VALUES ($1, $2, $3) RETURNING id, name, email',
+      'INSERT INTO users (name, email, password, verified) VALUES ($1, $2, $3, FALSE) RETURNING id, name, email',
       [name, email, hashedPassword]
     );
     
@@ -75,9 +87,44 @@ router.post('/register', async (req, res) => {
       [newUser.rows[0].id, token, expiresAt]
     );
     
+    // Generar verification token
+    const verificationToken = jwt.sign(
+      { id: newUser.rows[0].id, email, type: 'email_verification' },
+      process.env.JWT_SECRET,
+      { expiresIn: '24h' }
+    );
+    
+    // Guardar token de verificación
+    await db.query(
+      'INSERT INTO verification_tokens (user_id, token, expires_at) VALUES ($1, $2, NOW() + INTERVAL \'24 hours\')',
+      [newUser.rows[0].id, verificationToken]
+    );
+    
+    // Enviar email de verificación
+    const verificationUrl = `${process.env.FRONTEND_URL}/verify-email?token=${verificationToken}`;
+    
+    try {
+      await transporter.sendMail({
+        from: process.env.EMAIL_FROM,
+        to: email,
+        subject: 'Verifica tu dirección de correo electrónico',
+        html: `
+          <h1>Verificación de correo electrónico</h1>
+          <p>Hola ${name},</p>
+          <p>Gracias por registrarte. Por favor, haz clic en el siguiente enlace para verificar tu dirección de correo electrónico:</p>
+          <a href="${verificationUrl}" style="display: inline-block; padding: 10px 20px; background-color: #4a69bd; color: white; text-decoration: none; border-radius: 5px;">Verificar correo</a>
+          <p>Este enlace caducará en 24 horas.</p>
+          <p>Si no solicitaste este registro, puedes ignorar este correo.</p>
+        `
+      });
+    } catch (emailError) {
+      console.error('Error al enviar correo de verificación:', emailError);
+      // Continuamos con el registro aunque falle el envío del correo
+    }
+    
     res.status(201).json({
       message: 'Usuario registrado exitosamente',
-      user: newUser.rows[0],
+      user: { ...newUser.rows[0], verified: false },
       token
     });
   } catch (error) {
@@ -141,7 +188,7 @@ router.post('/login', async (req, res) => {
 // Ruta para obtener información del usuario (protegida - requiere autenticación)
 router.get('/me', authMiddleware, async (req, res) => {
   try {
-    const result = await db.query('SELECT id, name, email, created_at FROM users WHERE id = $1', [req.user.id]);
+    const result = await db.query('SELECT id, name, email, verified, created_at FROM users WHERE id = $1', [req.user.id]);
     
     if (result.rows.length === 0) {
       return res.status(404).json({ message: 'Usuario no encontrado' });
