@@ -1,9 +1,8 @@
 const express = require('express');
 const cors = require('cors');
-require('dotenv').config();
+// Eliminamos la importación de helmet por ahora
 const authRoutes = require('./routes/auth');
-const verificationRoutes = require('./routes/verification');
-const db = require('./db');
+require('dotenv').config();
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -31,18 +30,31 @@ app.options('*', cors(corsOptions));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Manually implement basic security headers instead of using helmet
+// Implementar manualmente los encabezados de seguridad básicos en lugar de usar Helmet
 app.use((req, res, next) => {
-  // Remove X-Powered-By header
+  // Ocultar el encabezado X-Powered-By
   res.removeHeader('X-Powered-By');
   
-  // Set security headers
-  res.setHeader('X-XSS-Protection', '0');
+  // Configurar encabezados de seguridad básicos
+  res.setHeader('X-XSS-Protection', '1; mode=block');
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('X-Frame-Options', 'SAMEORIGIN');
   res.setHeader('X-Download-Options', 'noopen');
   res.setHeader('X-DNS-Prefetch-Control', 'off');
   
+  // Intentar configurar HSTS
+  if (process.env.NODE_ENV === 'production') {
+    res.setHeader('Strict-Transport-Security', 'max-age=15552000; includeSubDomains');
+  }
+  
+  next();
+});
+
+// Agregar encabezados CORS manualmente para mayor seguridad
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
   next();
 });
 
@@ -51,11 +63,8 @@ app.get('/', (req, res) => {
   res.json({ message: 'API SMS Automation funcionando correctamente' });
 });
 
-// Rutas de autenticación
+// Rutas
 app.use('/api/auth', authRoutes);
-
-// Rutas de verificación de email
-app.use('/api/verification', verificationRoutes);
 
 // Manejo de errores
 app.use((err, req, res, next) => {
@@ -63,19 +72,9 @@ app.use((err, req, res, next) => {
   res.status(500).json({ message: 'Error interno del servidor' });
 });
 
-// Verificar conexión a la base de datos antes de iniciar el servidor
-db.query('SELECT NOW()', (err, res) => {
-  if (err) {
-    console.error('Error al conectar con la base de datos:', err);
-    process.exit(1);
-  } else {
-    console.log('Conexión a base de datos PostgreSQL establecida correctamente');
-    
-    // Iniciar servidor
-    app.listen(PORT, () => {
-      console.log(`Servidor ejecutándose en el puerto ${PORT} (${new Date().toISOString()})`);
-    });
-  }
+// Iniciar servidor
+app.listen(PORT, () => {
+  console.log(`Servidor ejecutándose en el puerto ${PORT} (${new Date().toISOString()})`);
 });
 
 // Manejo de errores no capturados
