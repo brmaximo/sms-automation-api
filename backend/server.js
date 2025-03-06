@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 require('dotenv').config();
 const authRoutes = require('./routes/auth');
+const verificationRoutes = require('./routes/verification');
 const db = require('./db');
 
 const app = express();
@@ -30,22 +31,17 @@ app.options('*', cors(corsOptions));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Implementar manualmente los encabezados de seguridad básicos en lugar de usar Helmet
+// Manually implement basic security headers instead of using helmet
 app.use((req, res, next) => {
-  // Ocultar el encabezado X-Powered-By
+  // Remove X-Powered-By header
   res.removeHeader('X-Powered-By');
   
-  // Configurar encabezados de seguridad básicos
+  // Set security headers
   res.setHeader('X-XSS-Protection', '0');
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('X-Frame-Options', 'SAMEORIGIN');
   res.setHeader('X-Download-Options', 'noopen');
   res.setHeader('X-DNS-Prefetch-Control', 'off');
-  
-  // Intentar configurar HSTS
-  if (process.env.NODE_ENV === 'production') {
-    res.setHeader('Strict-Transport-Security', 'max-age=15552000; includeSubDomains');
-  }
   
   next();
 });
@@ -57,6 +53,9 @@ app.get('/', (req, res) => {
 
 // Rutas de autenticación
 app.use('/api/auth', authRoutes);
+
+// Rutas de verificación de email
+app.use('/api/verification', verificationRoutes);
 
 // Manejo de errores
 app.use((err, req, res, next) => {
