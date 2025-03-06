@@ -30,22 +30,25 @@ app.options('*', cors(corsOptions));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Configurar Helmet de forma segura para Node.js compatibles
+// Configurar Helmet de forma segura para versiones antiguas de Node.js
 try {
-  const helmetConfig = {
-    contentSecurityPolicy: false,
-    dnsPrefetchControl: false,
-    frameguard: false,
-    hidePoweredBy: true,
-    hsts: false,
-    ieNoOpen: false,
-    noSniff: false,
-    permittedCrossDomainPolicies: false,
-    referrerPolicy: false,
-    xssFilter: false
-  };
+  // Usar configuraciones individuales de Helmet para evitar características avanzadas
+  app.use(helmet.hidePoweredBy());
+  app.use(helmet.frameguard({ action: 'sameorigin' }));
+  app.use(helmet.noSniff());
+  app.use(helmet.xssFilter());
+  app.use(helmet.ieNoOpen());
+  app.use(helmet.dnsPrefetchControl());
   
-  app.use(helmet(helmetConfig));
+  // Intentar aplicar HSTS si es posible
+  try {
+    app.use(helmet.hsts({
+      maxAge: 15552000,
+      includeSubDomains: true
+    }));
+  } catch (e) {
+    console.warn('No se pudo configurar HSTS:', e.message);
+  }
 } catch (error) {
   console.warn('Helmet no pudo inicializarse correctamente:', error.message);
   // Continuar sin helmet si hay problemas
