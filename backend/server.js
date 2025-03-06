@@ -1,8 +1,8 @@
 const express = require('express');
 const cors = require('cors');
-// Eliminamos la importación de helmet por ahora
-const authRoutes = require('./routes/auth');
 require('dotenv').config();
+const authRoutes = require('./routes/auth');
+const db = require('./db');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -36,7 +36,7 @@ app.use((req, res, next) => {
   res.removeHeader('X-Powered-By');
   
   // Configurar encabezados de seguridad básicos
-  res.setHeader('X-XSS-Protection', '1; mode=block');
+  res.setHeader('X-XSS-Protection', '0');
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('X-Frame-Options', 'SAMEORIGIN');
   res.setHeader('X-Download-Options', 'noopen');
@@ -50,20 +50,12 @@ app.use((req, res, next) => {
   next();
 });
 
-// Agregar encabezados CORS manualmente para mayor seguridad
-app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', '*');
-  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
-  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
-  next();
-});
-
 // Ruta básica para verificar que el servidor está funcionando
 app.get('/', (req, res) => {
   res.json({ message: 'API SMS Automation funcionando correctamente' });
 });
 
-// Rutas
+// Rutas de autenticación
 app.use('/api/auth', authRoutes);
 
 // Manejo de errores
@@ -72,9 +64,19 @@ app.use((err, req, res, next) => {
   res.status(500).json({ message: 'Error interno del servidor' });
 });
 
-// Iniciar servidor
-app.listen(PORT, () => {
-  console.log(`Servidor ejecutándose en el puerto ${PORT} (${new Date().toISOString()})`);
+// Verificar conexión a la base de datos antes de iniciar el servidor
+db.query('SELECT NOW()', (err, res) => {
+  if (err) {
+    console.error('Error al conectar con la base de datos:', err);
+    process.exit(1);
+  } else {
+    console.log('Conexión a base de datos PostgreSQL establecida correctamente');
+    
+    // Iniciar servidor
+    app.listen(PORT, () => {
+      console.log(`Servidor ejecutándose en el puerto ${PORT} (${new Date().toISOString()})`);
+    });
+  }
 });
 
 // Manejo de errores no capturados
