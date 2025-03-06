@@ -105,7 +105,7 @@ router.post('/register', async (req, res) => {
     
     try {
       await transporter.sendMail({
-        from: process.env.EMAIL_FROM,
+        from: process.env.EMAIL_FROM || 'noreply@example.com',
         to: email,
         subject: 'Verifica tu dirección de correo electrónico',
         html: `
