@@ -1,8 +1,8 @@
 const express = require('express');
 const cors = require('cors');
-const helmet = require('helmet');
-const authRoutes = require('./routes/auth');
 require('dotenv').config();
+const authRoutes = require('./routes/auth');
+const db = require('./db');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -30,35 +30,23 @@ app.options('*', cors(corsOptions));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Configurar Helmet de forma segura para versiones antiguas de Node.js
-try {
-  // Usar configuraciones individuales de Helmet para evitar características avanzadas
-  app.use(helmet.hidePoweredBy());
-  app.use(helmet.frameguard({ action: 'sameorigin' }));
-  app.use(helmet.noSniff());
-  app.use(helmet.xssFilter());
-  app.use(helmet.ieNoOpen());
-  app.use(helmet.dnsPrefetchControl());
-  
-  // Intentar aplicar HSTS si es posible
-  try {
-    app.use(helmet.hsts({
-      maxAge: 15552000,
-      includeSubDomains: true
-    }));
-  } catch (e) {
-    console.warn('No se pudo configurar HSTS:', e.message);
-  }
-} catch (error) {
-  console.warn('Helmet no pudo inicializarse correctamente:', error.message);
-  // Continuar sin helmet si hay problemas
-}
-
-// Agregar encabezados CORS manualmente para mayor seguridad
+// Implementar manualmente los encabezados de seguridad básicos en lugar de usar Helmet
 app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', '*');
-  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
-  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+  // Ocultar el encabezado X-Powered-By
+  res.removeHeader('X-Powered-By');
+  
+  // Configurar encabezados de seguridad básicos
+  res.setHeader('X-XSS-Protection', '0');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+  res.setHeader('X-Download-Options', 'noopen');
+  res.setHeader('X-DNS-Prefetch-Control', 'off');
+  
+  // Intentar configurar HSTS
+  if (process.env.NODE_ENV === 'production') {
+    res.setHeader('Strict-Transport-Security', 'max-age=15552000; includeSubDomains');
+  }
+  
   next();
 });
 
@@ -67,7 +55,7 @@ app.get('/', (req, res) => {
   res.json({ message: 'API SMS Automation funcionando correctamente' });
 });
 
-// Rutas
+// Rutas de autenticación
 app.use('/api/auth', authRoutes);
 
 // Manejo de errores
@@ -76,9 +64,19 @@ app.use((err, req, res, next) => {
   res.status(500).json({ message: 'Error interno del servidor' });
 });
 
-// Iniciar servidor
-app.listen(PORT, () => {
-  console.log(`Servidor ejecutándose en el puerto ${PORT} (${new Date().toISOString()})`);
+// Verificar conexión a la base de datos antes de iniciar el servidor
+db.query('SELECT NOW()', (err, res) => {
+  if (err) {
+    console.error('Error al conectar con la base de datos:', err);
+    process.exit(1);
+  } else {
+    console.log('Conexión a base de datos PostgreSQL establecida correctamente');
+    
+    // Iniciar servidor
+    app.listen(PORT, () => {
+      console.log(`Servidor ejecutándose en el puerto ${PORT} (${new Date().toISOString()})`);
+    });
+  }
 });
 
 // Manejo de errores no capturados
