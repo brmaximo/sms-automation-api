@@ -1,6 +1,6 @@
 const express = require('express');
 const cors = require('cors');
-const helmet = require('helmet');
+// Eliminamos la importación de helmet por ahora
 const authRoutes = require('./routes/auth');
 require('dotenv').config();
 
@@ -30,29 +30,25 @@ app.options('*', cors(corsOptions));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Configurar Helmet de forma segura para versiones antiguas de Node.js
-try {
-  // Usar configuraciones individuales de Helmet para evitar características avanzadas
-  app.use(helmet.hidePoweredBy());
-  app.use(helmet.frameguard({ action: 'sameorigin' }));
-  app.use(helmet.noSniff());
-  app.use(helmet.xssFilter());
-  app.use(helmet.ieNoOpen());
-  app.use(helmet.dnsPrefetchControl());
+// Implementar manualmente los encabezados de seguridad básicos en lugar de usar Helmet
+app.use((req, res, next) => {
+  // Ocultar el encabezado X-Powered-By
+  res.removeHeader('X-Powered-By');
   
-  // Intentar aplicar HSTS si es posible
-  try {
-    app.use(helmet.hsts({
-      maxAge: 15552000,
-      includeSubDomains: true
-    }));
-  } catch (e) {
-    console.warn('No se pudo configurar HSTS:', e.message);
+  // Configurar encabezados de seguridad básicos
+  res.setHeader('X-XSS-Protection', '1; mode=block');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+  res.setHeader('X-Download-Options', 'noopen');
+  res.setHeader('X-DNS-Prefetch-Control', 'off');
+  
+  // Intentar configurar HSTS
+  if (process.env.NODE_ENV === 'production') {
+    res.setHeader('Strict-Transport-Security', 'max-age=15552000; includeSubDomains');
   }
-} catch (error) {
-  console.warn('Helmet no pudo inicializarse correctamente:', error.message);
-  // Continuar sin helmet si hay problemas
-}
+  
+  next();
+});
 
 // Agregar encabezados CORS manualmente para mayor seguridad
 app.use((req, res, next) => {
