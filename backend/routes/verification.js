@@ -1,9 +1,10 @@
 const express = require('express');
 const router = express.Router();
 const crypto = require('crypto');
-const nodemailer = require('nodemailer');
 const db = require('../db');
 const authMiddleware = require('../middleware/auth');
+const { sendEmail } = require('../emailService');
+const { getVerificationEmailTemplate } = require('../emailTemplates');
 
 // Generate verification token
 function generateToken() {
@@ -12,36 +13,26 @@ function generateToken() {
 
 // Send verification email
 async function sendVerificationEmail(email, token) {
-  // Configure transporter
-  const transporter = nodemailer.createTransport({
-    host: process.env.EMAIL_HOST,
-    port: process.env.EMAIL_PORT,
-    secure: process.env.EMAIL_SECURE === 'true',
-    auth: {
-      user: process.env.EMAIL_USER,
-      pass: process.env.EMAIL_PASSWORD
-    }
-  });
-
   // Create verification URL
   const verificationUrl = `${process.env.FRONTEND_URL}/verify-email/${token}`;
-
-  // Send email
-  await transporter.sendMail({
-    from: `"SMS Automation" <${process.env.EMAIL_FROM}>`,
-    to: email,
-    subject: 'Verifica tu correo electrónico',
-    html: `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        <h2>Verifica tu dirección de correo electrónico</h2>
-        <p>Haz clic en el siguiente enlace para verificar tu correo electrónico:</p>
-        <p><a href="${verificationUrl}" style="background-color: #4a69bd; color: white; padding: 10px 15px; text-decoration: none; border-radius: 5px;">Verificar mi correo</a></p>
-        <p>O copia y pega este enlace en tu navegador:</p>
-        <p>${verificationUrl}</p>
-        <p>Este enlace expirará en 24 horas.</p>
-      </div>
-    `
-  });
+  
+  // Get HTML content using the template
+  const htmlContent = getVerificationEmailTemplate(verificationUrl);
+  
+  // Send email using Resend
+  try {
+    const result = await sendEmail(
+      email,
+      'Verifica tu correo electrónico',
+      htmlContent
+    );
+    
+    console.log(`Verification email sent to ${email}, Email ID: ${result.id}`);
+    return result;
+  } catch (error) {
+    console.error(`Failed to send verification email to ${email}:`, error);
+    throw error;
+  }
 }
 
 // PUBLIC ENDPOINT: Verify email with token
@@ -74,6 +65,32 @@ router.get('/verify/:token', async (req, res) => {
       'DELETE FROM verification_tokens WHERE id = $1',
       [tokenData.id]
     );
+    
+    // Get user data to potentially send welcome email
+    const userResult = await db.query(
+      'SELECT name, email FROM users WHERE id = $1',
+      [tokenData.user_id]
+    );
+    
+    if (userResult.rows.length > 0) {
+      const user = userResult.rows[0];
+      
+      // Optionally send a welcome email now that the user is verified
+      // This is not in the original code but can be a nice addition
+      try {
+        // If you've implemented the welcome email template
+        // const welcomeUrl = `${process.env.FRONTEND_URL}/login`;
+        // await sendEmail(
+        //   user.email,
+        //   `¡Bienvenido a SMS Automation, ${user.name}!`,
+        //   getWelcomeEmailTemplate(user.name, welcomeUrl)
+        // );
+        console.log(`User ${tokenData.user_id} has successfully verified their email.`);
+      } catch (welcomeEmailError) {
+        // Don't fail verification if welcome email fails
+        console.error('Failed to send welcome email:', welcomeEmailError);
+      }
+    }
     
     // Redirect to frontend success page or return success message
     res.json({ 
@@ -131,7 +148,7 @@ router.post('/resend', authMiddleware, async (req, res) => {
       [userId, token, expiresAt]
     );
     
-    // Send verification email
+    // Send verification email using Resend
     await sendVerificationEmail(user.email, token);
     
     res.json({ 
@@ -142,6 +159,52 @@ router.post('/resend', authMiddleware, async (req, res) => {
     res.status(500).json({ 
       message: 'Error al enviar el correo de verificación' 
     });
+  }
+});
+
+// Additional helper route to manually verify a user (for admin or testing)
+router.post('/manual-verify', authMiddleware, async (req, res) => {
+  try {
+    // This endpoint should be restricted to admin users in production
+    const { email } = req.body;
+    
+    if (!email) {
+      return res.status(400).json({ message: 'Se requiere dirección de email' });
+    }
+    
+    // Find user by email
+    const userResult = await db.query(
+      'SELECT id, verified FROM users WHERE email = $1',
+      [email]
+    );
+    
+    if (userResult.rows.length === 0) {
+      return res.status(404).json({ message: 'Usuario no encontrado' });
+    }
+    
+    const user = userResult.rows[0];
+    
+    // Check if already verified
+    if (user.verified) {
+      return res.status(400).json({ 
+        message: 'El correo ya está verificado',
+        verified: true
+      });
+    }
+    
+    // Mark user as verified
+    await db.query(
+      'UPDATE users SET verified = TRUE WHERE id = $1',
+      [user.id]
+    );
+    
+    res.json({ 
+      message: 'Usuario verificado manualmente con éxito',
+      verified: true
+    });
+  } catch (error) {
+    console.error('Error manually verifying user:', error);
+    res.status(500).json({ message: 'Error al verificar manualmente al usuario' });
   }
 });
 

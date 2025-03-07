@@ -4,6 +4,7 @@ require('dotenv').config();
 const authRoutes = require('./routes/auth');
 const verificationRoutes = require('./routes/verification');
 const db = require('./db');
+const { sendEmail } = require('./emailService');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -36,6 +37,29 @@ app.get('/', (req, res) => {
     message: 'API SMS Automation funcionando correctamente',
     timestamp: new Date().toISOString()
   });
+});
+
+// Test route for verifying Resend email functionality
+app.get('/api/test-email', async (req, res) => {
+  try {
+    const result = await sendEmail(
+      'test@example.com',  // Replace with a test email
+      'Test Email from SMS Automation',
+      '<p>This is a test email from your Resend implementation!</p>'
+    );
+    res.json({
+      success: true,
+      message: 'Test email sent successfully',
+      emailId: result.id
+    });
+  } catch (error) {
+    console.error('Error sending test email:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to send test email',
+      error: error.message
+    });
+  }
 });
 
 // Mount authentication routes
@@ -78,6 +102,9 @@ const server = app.listen(PORT, () => {
       console.error('Advertencia: Error al conectar con la base de datos:', error);
       console.error('El servidor continúa funcionando pero algunas funciones pueden no estar disponibles');
     });
+  
+  // Log email configuration
+  console.log('Email service configured with Resend');
 });
 
 // Error handling for server startup
