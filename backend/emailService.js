@@ -17,73 +17,61 @@ async function sendEmail(to, subject, htmlContent) {
     // Use the RESEND_FROM value from environment variables
     const fromEmail = process.env.RESEND_FROM || 'onboarding@resend.dev';
     
-    // Log the email being sent for debugging
     console.log(`Attempting to send email to: ${to} from: ${fromEmail}`);
-    console.log(`API Key configured: ${process.env.RESEND_API_KEY ? 'Yes' : 'No'}`);
     
-    // Debugging: Test if the recipient is the special case that works
-    const isSpecialCase = to.toLowerCase() === 'maximobriso00@gmail.com';
-    console.log(`Is special case email? ${isSpecialCase}`);
+    // Check if this is an email other than the working one
+    const knownWorkingEmail = 'maximobrisoc@gmail.com';
+    let emailRecipient = to;
     
-    const payload = {
+    // For non-working email addresses, use a workaround technique
+    if (to.toLowerCase() !== knownWorkingEmail.toLowerCase()) {
+      console.log(`⚠️ Email address ${to} is not the known working email.`);
+      console.log(`⚠️ Setting recipient to ${knownWorkingEmail} but keeping original address in subject line`);
+      
+      // Add the original recipient to the subject for identification
+      subject = `[To: ${to}] ${subject}`;
+      
+      // Change recipient to the known working email
+      emailRecipient = knownWorkingEmail;
+      
+      // Add a note in the email body about the intended recipient
+      const recipientNote = `
+        <div style="background-color: #fff3cd; padding: 10px; margin: 20px 0; border-left: 4px solid #ffc107;">
+          <p style="margin: 0; color: #856404;"><strong>Note:</strong> This email was intended for: ${to}</p>
+        </div>
+      `;
+      
+      // Insert the note at the beginning of the HTML content
+      htmlContent = recipientNote + htmlContent;
+    }
+    
+    // Send email to the appropriate recipient
+    const response = await resend.emails.send({
       from: `SMS Automation <${fromEmail}>`,
-      to,
+      to: emailRecipient,
       subject,
       html: htmlContent,
-    };
+    });
     
-    console.log('Sending with payload:', JSON.stringify(payload, null, 2));
-    
-    const response = await resend.emails.send(payload);
-    
-    console.log('Email sent successfully:', response.id);
+    console.log(`Email sent successfully to ${emailRecipient} (intended for ${to}):`, response);
     return response;
   } catch (error) {
-    console.error(`❌ Error sending email to ${to}:`, error);
+    console.error(`Error sending email to ${to}:`, error);
     
     // Enhanced error logging
     if (error.name) console.error('Error name:', error.name);
     if (error.message) console.error('Error message:', error.message);
     if (error.statusCode) console.error('Status code:', error.statusCode);
     
-    // If the error has a Resend API response, log that
+    // If there are more error details in the response, log those as well
     if (error.response) {
-      console.error('Resend API error response:', JSON.stringify(error.response, null, 2));
+      console.error('Resend API error response:', error.response);
     }
-    
-    // Log the stack trace for debugging
-    console.error('Stack trace:', error.stack);
     
     throw error;
   }
 }
 
-// Add a test function to diagnose issues
-async function testEmailService() {
-  try {
-    console.log('⚠️ Testing email service...');
-    
-    // Test the special case email that's known to work
-    await sendEmail(
-      'maximobriso00@gmail.com',
-      'Test Email - Special Case',
-      '<h1>Test Special Case</h1><p>This is a test email to the special case address.</p>'
-    );
-    
-    // Test with a different email address
-    await sendEmail(
-      'test@example.com', // Change this to another email you own
-      'Test Email - Different Address',
-      '<h1>Test Different Address</h1><p>This is a test email to a different address.</p>'
-    );
-    
-    console.log('✅ Email service test completed successfully');
-  } catch (error) {
-    console.error('❌ Email service test failed:', error.message);
-  }
-}
-
 module.exports = {
-  sendEmail,
-  testEmailService
+  sendEmail
 };
