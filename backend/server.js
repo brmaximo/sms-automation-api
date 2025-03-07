@@ -1,8 +1,13 @@
 const express = require('express');
 const cors = require('cors');
+const path = require('path');
 require('dotenv').config();
 const authRoutes = require('./routes/auth');
 const verificationRoutes = require('./routes/verification');
+const campaignRoutes = require('./routes/campaigns');
+const templateRoutes = require('./routes/templates');
+const scheduleRoutes = require('./routes/schedules');
+const publicRoutes = require('./routes/public');
 const db = require('./db');
 const { sendEmail } = require('./emailService');
 
@@ -34,6 +39,9 @@ app.use((req, res, next) => {
   res.setHeader('Referrer-Policy', 'no-referrer');
   next();
 });
+
+// Configurar carpeta de archivos estáticos para los QR codes
+app.use('/public', express.static(path.join(__dirname, 'public')));
 
 // Basic route for API health check
 app.get('/', (req, res) => {
@@ -210,11 +218,13 @@ app.get('/api/simple-test-email', async (req, res) => {
   }
 });
 
-// Mount authentication routes
+// Mount route handlers
 app.use('/api/auth', authRoutes);
-
-// Mount verification routes
 app.use('/api/verification', verificationRoutes);
+app.use('/api/campaigns', campaignRoutes);
+app.use('/api/templates', templateRoutes);
+app.use('/api/schedules', scheduleRoutes);
+app.use('/api/public', publicRoutes);
 
 // Global error handler
 app.use((err, req, res, next) => {
