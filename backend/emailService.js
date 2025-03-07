@@ -14,60 +14,27 @@ const resend = new Resend(process.env.RESEND_API_KEY);
  */
 async function sendEmail(to, subject, htmlContent) {
   try {
-    // Use the RESEND_FROM value from environment variables
-    const fromEmail = process.env.RESEND_FROM || 'onboarding@resend.dev';
+    const fromEmail = process.env.RESEND_FROM || 'noreply@api.yo-towingllc.com';
     
-    console.log(`Attempting to send email to: ${to} from: ${fromEmail}`);
+    console.log(`Sending email to: ${to} from: ${fromEmail}`);
     
-    // Check if this is an email other than the working one
-    const knownWorkingEmail = 'maximobrisoc@gmail.com';
-    let emailRecipient = to;
-    
-    // For non-working email addresses, use a workaround technique
-    if (to.toLowerCase() !== knownWorkingEmail.toLowerCase()) {
-      console.log(`⚠️ Email address ${to} is not the known working email.`);
-      console.log(`⚠️ Setting recipient to ${knownWorkingEmail} but keeping original address in subject line`);
-      
-      // Add the original recipient to the subject for identification
-      subject = `[To: ${to}] ${subject}`;
-      
-      // Change recipient to the known working email
-      emailRecipient = knownWorkingEmail;
-      
-      // Add a note in the email body about the intended recipient
-      const recipientNote = `
-        <div style="background-color: #fff3cd; padding: 10px; margin: 20px 0; border-left: 4px solid #ffc107;">
-          <p style="margin: 0; color: #856404;"><strong>Note:</strong> This email was intended for: ${to}</p>
-        </div>
-      `;
-      
-      // Insert the note at the beginning of the HTML content
-      htmlContent = recipientNote + htmlContent;
-    }
-    
-    // Send email to the appropriate recipient
     const response = await resend.emails.send({
       from: `SMS Automation <${fromEmail}>`,
-      to: emailRecipient,
+      to,
       subject,
-      html: htmlContent,
+      html: htmlContent
     });
     
-    console.log(`Email sent successfully to ${emailRecipient} (intended for ${to}):`, response);
+    // Check if response contains an error
+    if (response.error) {
+      console.error('Resend API returned error:', response.error);
+      throw response.error;
+    }
+    
+    console.log(`Email sent successfully with ID: ${response.id}`);
     return response;
   } catch (error) {
     console.error(`Error sending email to ${to}:`, error);
-    
-    // Enhanced error logging
-    if (error.name) console.error('Error name:', error.name);
-    if (error.message) console.error('Error message:', error.message);
-    if (error.statusCode) console.error('Status code:', error.statusCode);
-    
-    // If there are more error details in the response, log those as well
-    if (error.response) {
-      console.error('Resend API error response:', error.response);
-    }
-    
     throw error;
   }
 }
